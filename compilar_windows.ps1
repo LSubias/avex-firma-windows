@@ -58,10 +58,12 @@ if ($LASTEXITCODE -ne 0) {
     throw "PyInstaller no pudo construir el agente."
 }
 
+$isccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
 $isccCandidates = @(
-    "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
+    $(if ($isccCommand) { $isccCommand.Source }),
+    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
     "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-)
+) | Where-Object { $_ }
 $iscc = $isccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) {
     throw "No se encontró Inno Setup 6. Instalalo y volvé a ejecutar este archivo."
