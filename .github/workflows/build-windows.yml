@@ -1,0 +1,75 @@
+name: Compilar instalador Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2025
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v5
+
+      - name: Preparar Python x86
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          architecture: "x86"
+
+      - name: Compilar agente e instalador
+        shell: powershell
+        run: |
+          .\compilar_windows.ps1 -PythonExecutable "$env:pythonLocation\python.exe"
+
+      - name: Probar arranque del agente
+        shell: powershell
+        run: |
+          $executable = Join-Path $env:GITHUB_WORKSPACE "dist\AgenteFirmaAVEX\AgenteFirmaAVEX.exe"
+          $bytes = [System.IO.File]::ReadAllBytes($executable)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          if ($machine -ne 0x014C) {
+            throw "El ejecutable no es PE32 x86. Machine=0x$($machine.ToString('X4'))"
+          }
+          Write-Host "Arquitectura PE32 x86 confirmada."
+
+          $process = Start-Process -FilePath $executable -PassThru
+          try {
+            $response = $null
+            for ($attempt = 1; $attempt -le 20; $attempt++) {
+              if ($process.HasExited) {
+                throw "El agente terminó antes de responder. Código: $($process.ExitCode)"
+              }
+              try {
+                $response = Invoke-RestMethod -Uri "http://127.0.0.1:47812/estado" -TimeoutSec 2
+                break
+              } catch {
+                Start-Sleep -Seconds 1
+              }
+            }
+            if (-not $response -or $response.agente -ne "activo") {
+              throw "El agente no respondió correctamente en /estado."
+            }
+            Write-Host "Agente activo; arquitectura=$($response.arquitectura); SafeNet=$($response.middleware_safenet)"
+          } finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+
+      - name: Verificar instalador
+        shell: powershell
+        run: |
+          $installer = "salida\AvexFirmaSetup.exe"
+          if (-not (Test-Path $installer)) {
+            throw "No se generó $installer"
+          }
+          Get-Item $installer | Format-List Name, Length, LastWriteTime
+
+      - name: Publicar instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: AvexFirma-Windows-1.0.1-x86
+          path: salida/AvexFirmaSetup.exe
+          if-no-files-found: error

@@ -1,0 +1,9 @@
+El MSI oficial recibido ya está incluido con este nombre:
+
+    SafeNetAuthenticationClient-x32.msi
+
+Corresponde a SafeNet Authentication Client 10.8 R6 (10.8.2154.0), arquitectura
+Intel de 32 bits. Por ese motivo el agente también se compila en 32 bits.
+
+Verificá que la licencia de Thales permita redistribuir este MSI dentro del
+instalador de la organización.
